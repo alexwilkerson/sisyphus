@@ -30,17 +30,20 @@ const (
 )
 
 type user struct {
-	ID       int        `json:"id,omitempty"`
-	Username string     `json:"username,omitempty"`
-	Password string     `json:"password,omitempty"`
-	Email    string     `json:"email,omitempty"`
-	LastPush *time.Time `json:"last_push,omitempty"`
-	Secret   string     `json:"secret,omitempty"`
-	Contact1 string     `json:"contact1,omitempty"`
-	Contact2 string     `json:"contact2,omitempty"`
-	Contact3 string     `json:"contact3,omitempty"`
-	Contact4 string     `json:"contact4,omitempty"`
-	Contact5 string     `json:"contact5,omitempty"`
+	ID           int        `json:"id,omitempty"`
+	Active       bool       `json:"active,omitempty"`
+	CreationDate *time.Time `json:"creation_date,omitempty"`
+	Day          int        `json:"day,omitempty"`
+	Username     string     `json:"username,omitempty"`
+	Password     string     `json:"password,omitempty"`
+	Email        string     `json:"email,omitempty"`
+	LastPush     *time.Time `json:"last_push,omitempty"`
+	Secret       string     `json:"secret,omitempty"`
+	Contact1     string     `json:"contact1,omitempty"`
+	Contact2     string     `json:"contact2,omitempty"`
+	Contact3     string     `json:"contact3,omitempty"`
+	Contact4     string     `json:"contact4,omitempty"`
+	Contact5     string     `json:"contact5,omitempty"`
 }
 
 type jsonError struct {
@@ -77,12 +80,13 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sqlStatement := `
-		SELECT id, password
+		SELECT id, password, creation_date, active, last_push
 		FROM users
 		WHERE username = $1
 	`
 	var passwordFromDB []byte
-	err = db.QueryRow(sqlStatement, u.Username).Scan(&u.ID, &passwordFromDB)
+	err = db.QueryRow(sqlStatement, u.Username).Scan(&u.ID, &passwordFromDB,
+		&u.CreationDate, &u.Active, &u.LastPush)
 	if err != nil {
 		writeJSONError(w, err.Error())
 		return
@@ -92,8 +96,11 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	calculateDay(&u)
+
 	u.Password = ""
 	u.Username = ""
+	u.CreationDate = nil
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(u)
 }
@@ -144,20 +151,23 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sqlStatement := `
-		INSERT INTO users (username, password, email, last_push, secret, contact1, contact2, contact3, contact4, contact5)
-		VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7, $8, $9)
-		RETURNING id, username, email, last_push, secret, contact1, contact2, contact3, contact4, contact5
+		INSERT INTO users (creation_date, username, password, email,
+		last_push, secret, contact1, contact2, contact3, contact4, contact5)
+		VALUES (NOW(), $1, $2, $3, NOW(), $4, $5, $6, $7, $8, $9)
+		RETURNING id, creation_date, active, username, email, last_push,
+		secret, contact1, contact2, contact3, contact4, contact5
 	`
 	err = db.QueryRow(sqlStatement, u.Username, hash, u.Email,
 		u.Secret, u.Contact1, u.Contact2, u.Contact3, u.Contact4,
-		u.Contact5).Scan(&u.ID, &u.Username, &u.Email,
-		&u.LastPush, &u.Secret, &u.Contact1, &u.Contact2,
+		u.Contact5).Scan(&u.ID, &u.CreationDate, &u.Active, &u.Username,
+		&u.Email, &u.LastPush, &u.Secret, &u.Contact1, &u.Contact2,
 		&u.Contact3, &u.Contact4, &u.Contact5)
 	if err != nil {
 		writeJSONError(w, err.Error())
 		return
 	}
 	u.Password = ""
+	calculateDay(&u)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(u)
 }
@@ -165,18 +175,20 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 func getUserHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	sqlStatement := `
-		SELECT id, username, email, last_push, secret, contact1, contact2, contact3, contact4, contact5
+		SELECT id, creation_date, active, username, email, last_push, secret, contact1, contact2, contact3, contact4, contact5
 		FROM users
 		wHERE id = $1
 	`
 	var u user
-	err := db.QueryRow(sqlStatement, id).Scan(&u.ID, &u.Username, &u.Email, &u.LastPush,
-		&u.Secret, &u.Contact1, &u.Contact2,
+	err := db.QueryRow(sqlStatement, id).Scan(&u.ID,
+		&u.CreationDate, &u.Active, &u.Username, &u.Email,
+		&u.LastPush, &u.Secret, &u.Contact1, &u.Contact2,
 		&u.Contact3, &u.Contact4, &u.Contact5)
 	if err != nil {
 		writeJSONError(w, err.Error())
 		return
 	}
+	calculateDay(&u)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(u)
 }
@@ -198,13 +210,14 @@ func pushHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sqlStatement := `
-		SELECT id, username, password, email, last_push, secret, contact1, contact2, contact3, contact4, contact5
+		SELECT id, creation_date, active, username, password, email,
+		last_push, secret, contact1, contact2, contact3, contact4, contact5
 		FROM users
 		WHERE id = $1
 	`
 	var passwordFromDB []byte
-	err = db.QueryRow(sqlStatement, u.ID).Scan(&u.ID,
-		&u.Username, &passwordFromDB, &u.Email, &u.LastPush,
+	err = db.QueryRow(sqlStatement, u.ID).Scan(&u.ID, &u.CreationDate,
+		&u.Active, &u.Username, &passwordFromDB, &u.Email, &u.LastPush,
 		&u.Secret, &u.Contact1, &u.Contact2,
 		&u.Contact3, &u.Contact4, &u.Contact5)
 	if err != nil {
@@ -229,6 +242,7 @@ func pushHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u.Password = ""
+	calculateDay(&u)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(u)
 }
@@ -237,6 +251,12 @@ func writeJSONError(w http.ResponseWriter, e string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 	json.NewEncoder(w).Encode(jsonError{Error: e})
+}
+
+func calculateDay(u *user) {
+	date := time.Now().Local().Add(-time.Hour * 6)
+	diff := date.Sub(*u.CreationDate)
+	u.Day = int(diff.Hours()/24) + 1
 }
 
 func initDB() {
