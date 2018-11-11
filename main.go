@@ -160,7 +160,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 	err = db.QueryRow(sqlStatement, u.Username, hash, u.Email,
 		u.Secret, u.Contact1, u.Contact2, u.Contact3, u.Contact4,
 		u.Contact5).Scan(&u.ID, &u.CreationDate, &u.Active, &u.Username,
-		&u.Email, &u.Fulfilled, &u.LastPush, &u.Secret, &u.Contact1, &u.Contact2,
+		&u.Email, &u.LastPush, &u.Fulfilled, &u.Secret, &u.Contact1, &u.Contact2,
 		&u.Contact3, &u.Contact4, &u.Contact5)
 	if err != nil {
 		writeJSONError(w, err.Error())
