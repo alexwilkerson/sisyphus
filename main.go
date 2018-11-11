@@ -254,7 +254,7 @@ func writeJSONError(w http.ResponseWriter, e string) {
 }
 
 func calculateDay(u *user) {
-	date := time.Now().Local().Add(-time.Hour * 6)
+	date := time.Now().Local()
 	diff := date.Sub(*u.CreationDate)
 	u.Day = int(diff.Hours()/24) + 1
 }
