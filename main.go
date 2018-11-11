@@ -38,6 +38,7 @@ type user struct {
 	Password     string     `json:"password,omitempty"`
 	Email        string     `json:"email,omitempty"`
 	LastPush     *time.Time `json:"last_push,omitempty"`
+	Fulfilled    bool       `json:"fulfilled,omitempty"`
 	Secret       string     `json:"secret,omitempty"`
 	Contact1     string     `json:"contact1,omitempty"`
 	Contact2     string     `json:"contact2,omitempty"`
@@ -72,7 +73,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u.Username == "" || u.Password == "" {
-		writeJSONError(w, "empty of missing fields")
+		writeJSONError(w, "empty or missing fields")
 		return
 	}
 	if err != nil {
@@ -80,13 +81,13 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sqlStatement := `
-		SELECT id, password, creation_date, active, last_push
+		SELECT id, password, creation_date, active, last_push, fulfilled
 		FROM users
 		WHERE username = $1
 	`
 	var passwordFromDB []byte
 	err = db.QueryRow(sqlStatement, u.Username).Scan(&u.ID, &passwordFromDB,
-		&u.CreationDate, &u.Active, &u.LastPush)
+		&u.CreationDate, &u.Active, &u.LastPush, &u.Fulfilled)
 	if err != nil {
 		writeJSONError(w, err.Error())
 		return
@@ -99,7 +100,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	calculateDay(&u)
 
 	u.Password = ""
-	u.Username = ""
 	u.CreationDate = nil
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(u)
@@ -154,13 +154,13 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO users (creation_date, username, password, email,
 		last_push, secret, contact1, contact2, contact3, contact4, contact5)
 		VALUES (NOW(), $1, $2, $3, NOW(), $4, $5, $6, $7, $8, $9)
-		RETURNING id, creation_date, active, username, email, last_push,
+		RETURNING id, creation_date, active, username, email, last_push, fulfilled,
 		secret, contact1, contact2, contact3, contact4, contact5
 	`
 	err = db.QueryRow(sqlStatement, u.Username, hash, u.Email,
 		u.Secret, u.Contact1, u.Contact2, u.Contact3, u.Contact4,
 		u.Contact5).Scan(&u.ID, &u.CreationDate, &u.Active, &u.Username,
-		&u.Email, &u.LastPush, &u.Secret, &u.Contact1, &u.Contact2,
+		&u.Email, &u.Fulfilled, &u.LastPush, &u.Secret, &u.Contact1, &u.Contact2,
 		&u.Contact3, &u.Contact4, &u.Contact5)
 	if err != nil {
 		writeJSONError(w, err.Error())
@@ -175,14 +175,14 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 func getUserHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	sqlStatement := `
-		SELECT id, creation_date, active, username, email, last_push, secret, contact1, contact2, contact3, contact4, contact5
+		SELECT id, creation_date, active, username, email, last_push, fulfilled, secret, contact1, contact2, contact3, contact4, contact5
 		FROM users
 		wHERE id = $1
 	`
 	var u user
 	err := db.QueryRow(sqlStatement, id).Scan(&u.ID,
 		&u.CreationDate, &u.Active, &u.Username, &u.Email,
-		&u.LastPush, &u.Secret, &u.Contact1, &u.Contact2,
+		&u.LastPush, &u.Fulfilled, &u.Secret, &u.Contact1, &u.Contact2,
 		&u.Contact3, &u.Contact4, &u.Contact5)
 	if err != nil {
 		writeJSONError(w, err.Error())
@@ -211,14 +211,14 @@ func pushHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	sqlStatement := `
 		SELECT id, creation_date, active, username, password, email,
-		last_push, secret, contact1, contact2, contact3, contact4, contact5
+		last_push, fulfilled, secret, contact1, contact2, contact3, contact4, contact5
 		FROM users
 		WHERE id = $1
 	`
 	var passwordFromDB []byte
 	err = db.QueryRow(sqlStatement, u.ID).Scan(&u.ID, &u.CreationDate,
 		&u.Active, &u.Username, &passwordFromDB, &u.Email, &u.LastPush,
-		&u.Secret, &u.Contact1, &u.Contact2,
+		&u.Fulfilled, &u.Secret, &u.Contact1, &u.Contact2,
 		&u.Contact3, &u.Contact4, &u.Contact5)
 	if err != nil {
 		writeJSONError(w, err.Error())
@@ -231,11 +231,11 @@ func pushHandler(w http.ResponseWriter, r *http.Request) {
 
 	sqlStatement = `
 		UPDATE users
-		SET last_push = NOW()
+		SET last_push = NOW(), fulfilled = true
 		WHERE id = $1
-		RETURNING last_push
+		RETURNING last_push, fulfilled
 	`
-	err = db.QueryRow(sqlStatement, u.ID).Scan(&u.LastPush)
+	err = db.QueryRow(sqlStatement, u.ID).Scan(&u.LastPush, &u.Fulfilled)
 	if err != nil {
 		writeJSONError(w, err.Error())
 		return
