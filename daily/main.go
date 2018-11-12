@@ -48,6 +48,8 @@ func main() {
 	initDB()
 	defer db.Close()
 
+	fmt.Println(time.Now())
+
 	sqlStatement := `
 		SELECT id, active, username, email, last_push,
 			secret, contact1, contact2, contact3, contact4, contact5
