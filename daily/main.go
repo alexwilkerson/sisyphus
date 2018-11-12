@@ -49,8 +49,6 @@ func main() {
 	initDB()
 	defer db.Close()
 
-	fmt.Println(time.Now())
-
 	var count int
 
 	sqlStatement := `
@@ -63,8 +61,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	fmt.Println(count)
 
 	sqlStatement = `
 		SELECT id, active, username, email, last_push,
@@ -92,15 +88,28 @@ func main() {
 		panic(err)
 	}
 
-	var wg sync.WaitGroup
-	for _, u := range unfulfilledUsers {
-		wg.Add(2)
-		go destroyUser(&u, &wg)
-		go deactivateUser(&u, &wg)
+	if len(unfulfilledUsers) == count {
+		sqlStatement = `
+			UPDATE users
+			SET active = false
+			WHERE active = true	
+		`
+		_, err = db.Exec(sqlStatement)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("All users have been released from the contracts.")
+	} else {
+		var wg sync.WaitGroup
+		for _, u := range unfulfilledUsers {
+			wg.Add(2)
+			go destroyUser(&u, &wg)
+			go deactivateUser(&u, &wg)
+		}
+		wg.Wait()
+		fmt.Println(len(unfulfilledUsers), "users were destroyed.")
 	}
-	wg.Wait()
 
-	// send("alex@uncorrected.com", "hello there")
 }
 
 func destroyUser(u *user, wg *sync.WaitGroup) {
