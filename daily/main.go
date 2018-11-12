@@ -101,8 +101,8 @@ func send(to, body string) {
 
 func calculateHours(t time.Time) int {
 	elapsed := time.Since(t)
-	fmt.Println(int(elapsed.Hours()), "Hours")
-	return int(elapsed.Hours())
+	fmt.Println(int(elapsed.Hours())-6, "Hours")
+	return int(elapsed.Hours()) - 6
 }
 
 func initDB() {
