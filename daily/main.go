@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/smtp"
 	"os"
+	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -76,17 +77,59 @@ func main() {
 		panic(err)
 	}
 
+	var wg sync.WaitGroup
+	for _, u := range unfulfilledUsers {
+		wg.Add(2)
+		go destroyUser(&u, &wg)
+		go deactivateUser(&u, &wg)
+	}
+	wg.Wait()
+
 	// send("alex@uncorrected.com", "hello there")
 }
 
-func send(to, body string) {
-	from := os.Getenv("SISYPHUSEMAIL")
-	pass := os.Getenv("SISYPHUSEMAILPW")
+func destroyUser(u *user, wg *sync.WaitGroup) {
+	send(u.Email, u.Contact1, u.Secret)
+	send(u.Email, u.Contact2, u.Secret)
+	send(u.Email, u.Contact3, u.Secret)
+	send(u.Email, u.Contact4, u.Secret)
+	send(u.Email, u.Contact5, u.Secret)
 
+	msg := "Your secret is out."
+
+	err := smtp.SendMail("smtp.gmail.com:587",
+		smtp.PlainAuth("", from, pass, "smtp.gmail.com"),
+		from, []string{u.Email}, []byte(msg))
+
+	if err != nil {
+		wg.Done()
+		panic(err)
+	}
+
+	wg.Done()
+}
+
+func deactivateUser(u *user, wg *sync.WaitGroup) {
+	sqlStatement := `
+		UPDATE users
+		SET active = false, fulfilled = false
+		WHERE id = $1
+	`
+	err := db.QueryRow(sqlStatement, u.ID)
+	if err != nil {
+		wg.Done()
+		panic(err)
+	}
+	wg.Done()
+}
+
+func send(email, to, secret string) {
 	msg := "From: " + from + "\n" +
 		"To: " + to + "\n" +
 		"Subject: Sisyphus Greets You\n\n" +
-		body
+		"Some you know with the email " + email + " has not upheld a contract.\n" +
+		"The following is something they do not want you to know. I am so, so sorry.\n\n" +
+		"\"" + secret + "\" -" + email + "\n\nSisyphus Mailer"
 
 	err := smtp.SendMail("smtp.gmail.com:587",
 		smtp.PlainAuth("", from, pass, "smtp.gmail.com"),
@@ -101,7 +144,6 @@ func send(to, body string) {
 
 func calculateHours(t time.Time) int {
 	elapsed := time.Since(t)
-	fmt.Println(int(elapsed.Hours())-6, "Hours")
 	return int(elapsed.Hours()) - 6
 }
 
