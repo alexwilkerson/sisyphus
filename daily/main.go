@@ -66,7 +66,7 @@ func main() {
 		err = rows.Scan(&u.ID, &u.Active, &u.Username, &u.Email, &u.LastPush,
 			&u.Secret, &u.Contact1, &u.Contact2, &u.Contact3,
 			&u.Contact4, &u.Contact5)
-		print("yes")
+		fmt.Println(*u.LastPush)
 		if calculateHours(*u.LastPush) > 24 {
 			unfulfilledUsers = append(unfulfilledUsers, u)
 		}
