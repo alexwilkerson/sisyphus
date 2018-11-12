@@ -100,10 +100,9 @@ func send(to, body string) {
 }
 
 func calculateHours(t time.Time) int {
-	date := time.Now().Local()
-	diff := date.Sub(t)
-	print(int(diff.Hours()))
-	return int(diff.Hours())
+	elapsed := time.Since(t)
+	print(int(elapsed.Hours()))
+	return int(elapsed.Hours())
 }
 
 func initDB() {
