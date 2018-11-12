@@ -101,7 +101,7 @@ func send(to, body string) {
 
 func calculateHours(t time.Time) int {
 	elapsed := time.Since(t)
-	print(int(elapsed.Hours()))
+	fmt.Println(int(elapsed.Hours()), "Hours")
 	return int(elapsed.Hours())
 }
 
