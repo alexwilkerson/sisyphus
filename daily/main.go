@@ -51,7 +51,22 @@ func main() {
 
 	fmt.Println(time.Now())
 
+	var count int
+
 	sqlStatement := `
+		SELECT COUNT(*)
+		FROM users
+		WHERE active = true
+	`
+
+	err := db.QueryRow(sqlStatement).Scan(&count)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(count)
+
+	sqlStatement = `
 		SELECT id, active, username, email, last_push,
 			secret, contact1, contact2, contact3, contact4, contact5
 		FROM users
