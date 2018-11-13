@@ -137,10 +137,11 @@ func deactivateUser(u *user, wg *sync.WaitGroup) {
 		UPDATE users
 		SET active = false, fulfilled = false
 		WHERE id = $1
+		RETURNING id
 	`
-	err := db.QueryRow(sqlStatement, u.ID)
+	var id int
+	err := db.QueryRow(sqlStatement, u.ID).Scan(&id)
 	if err != nil {
-		wg.Done()
 		panic(err)
 	}
 	wg.Done()
